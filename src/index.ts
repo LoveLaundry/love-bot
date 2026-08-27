@@ -1,5 +1,5 @@
 import "dotenv/config";
-import app from "./app";
+import { app } from "../api/chat";
 
 const PORT = Number(process.env.PORT) || 3001;
 
