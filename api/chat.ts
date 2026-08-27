@@ -1,6 +1,21 @@
-import app from "../src/app";
-
-// Vercel invokes this with (req, res) — an Express app is a valid request
-// listener, so we export it directly. The function is mounted at /api/chat,
-// which matches the app's POST /api/chat route.
-export default app;
+// Vercel serverless entry. @vercel/node looks for a named `handler` export.
+// We lazy-import the Express app so any module-load error is caught and
+// surfaced in the response (temporary diagnostic — see console.error too).
+export const handler = async (req: any, res: any) => {
+    try {
+        const mod = await import("../src/app");
+        const app = mod.default;
+        return app(req, res);
+    } catch (e: any) {
+        console.error("BOT_HANDLER_ERROR", e);
+        res.statusCode = 500;
+        res.setHeader("Content-Type", "application/json");
+        res.end(
+            JSON.stringify({
+                error: "bot handler failed",
+                message: e?.message ?? String(e),
+                stack: e?.stack,
+            }),
+        );
+    }
+};
