@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "buildCommand": null,
   "functions": {
     "api/chat.ts": {
       "maxDuration": 15,
