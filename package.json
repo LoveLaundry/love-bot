@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit",
-    "start": "tsx src/index.ts"
+    "start": "tsx src/index.ts",
+    "build:dataset": "tsx scripts/build-dataset.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -1,119 +1,14 @@
 import express from "express";
 import cors from "cors";
+import { buildContext, extractOrderRef } from "../src/knowledge/context";
+import { getOrderTracking, formatTracking } from "../src/knowledge/liveData";
+import { faqs } from "../src/knowledge/businessData";
+import type { Lang } from "../src/knowledge/businessData";
 
-// ───────────────────────── Types ─────────────────────────
-type Lang = "en" | "sin";
-
-interface Faq {
-    intent: string;
-    patterns: string[];
-    responses: { en: string[]; sin?: string[] };
-}
-
-interface ChatResponse {
-    reply: string;
-    intent?: string;
-}
-
-// ─────────────────────── Knowledge base ───────────────────────
-const faqs: Faq[] = [
-    {
-        intent: "greeting",
-        patterns: ["hi", "hello", "hey", "good morning", "good evening", "howdy", "sup"],
-        responses: {
-            en: [
-                "Hello! Welcome to Love Laundry. How can I help you today?",
-                "Hey there! Need help with laundry? I'm here for you.",
-                "Hi! Thanks for reaching out to Love Laundry. What can I do for you?",
-            ],
-        },
-    },
-    {
-        intent: "services",
-        patterns: ["service", "offer", "provide", "wash", "fold", "iron", "dry clean", "laundry"],
-        responses: {
-            en: [
-                "We offer 4 main services:\n\n1. Wash & Fold — Everyday laundry\n2. Ironing — Crisp, pressed clothes\n3. Dry Cleaning — Suits, dresses, delicates\n4. Pickup & Delivery — We collect and return to your door\n\nWould you like to know more about any of these?",
-            ],
-        },
-    },
-    {
-        intent: "pricing",
-        patterns: ["how much", "price", "cost", "rate", "charge", "fee", "tariff", "quote"],
-        responses: {
-            en: [
-                "Our general pricing:\n\n• Wash & Fold: From Rs. 200/kg\n• Ironing: From Rs. 50/piece\n• Dry Cleaning: From Rs. 300/piece\n\nFor an exact quote, call us or WhatsApp!",
-            ],
-        },
-    },
-    {
-        intent: "pickup",
-        patterns: ["pick up", "pickup", "deliver", "collect", "drop off", "schedule", "book", "turnaround"],
-        responses: {
-            en: [
-                "We offer free pickup and delivery! Here's how:\n\n1. Call or WhatsApp us to schedule\n2. We collect your laundry\n3. We wash, fold/iron, and deliver back fresh!\n\nTypical turnaround: 24–48 hours.",
-            ],
-        },
-    },
-    {
-        intent: "locations",
-        patterns: ["where", "location", "address", "branch", "chilaw", "madampe", "mahawewa", "find you", "map"],
-        responses: {
-            en: [
-                "Our main centre is in Chilaw. We also have collection points in Madampe, Mahawewa, Kottaramulla, Dunakadeniya, Bibiladeniya, and Wennappuwa.\n\nScroll down on our website to see all locations on the map!",
-            ],
-        },
-    },
-    {
-        intent: "hours",
-        patterns: ["hour", "open", "close", "time", "when", "available"],
-        responses: {
-            en: [
-                "We're available 24/7 for WhatsApp bookings!\n\nPickup & delivery hours:\n• Mon–Sat: 8 AM – 7 PM\n• Sunday: 9 AM – 5 PM",
-            ],
-        },
-    },
-    {
-        intent: "contact",
-        patterns: ["contact", "phone", "whatsapp", "call", "email", "number", "reach"],
-        responses: {
-            en: [
-                "Reach us at:\n\n📞 Phone: +94 77 420 0919\n💬 WhatsApp: +94 77 420 0919\n📧 Email: lovelaundry01@gmail.com",
-            ],
-        },
-    },
-    {
-        intent: "commercial",
-        patterns: ["hotel", "business", "commercial", "bulk", "restaurant", "spa", "gym", "corporate", "linen"],
-        responses: {
-            en: [
-                "Yes! We serve hotels, restaurants, spas, and businesses. Our commercial services include Hotel Linen, Commercial Laundry, and Bulk Processing.\n\nWe partner with 9 hotels including Goldi Sands, Amagi, and Camelot. Contact us for a custom quote!",
-            ],
-        },
-    },
-    {
-        intent: "careers",
-        patterns: ["job", "hiring", "work", "career", "team", "employ", "vacancy", "apply"],
-        responses: {
-            en: [
-                "We're hiring! Current openings:\n\n• Delivery Driver\n• Machine Operator\n• Ironer / Presser\n• Collection Agent\n\nBenefits include competitive pay, training, and flexible schedules. Send us a WhatsApp message to apply!",
-            ],
-        },
-    },
-    {
-        intent: "quality",
-        patterns: ["quality", "care", "safe", "damage", "delicate", "stain", "silk", "trust"],
-        responses: {
-            en: [
-                "We treat every garment with professional care! Professional-grade equipment, separate handling for delicates, quality inspection before delivery, and a 4.9/5 customer rating.",
-            ],
-        },
-    },
-];
-
+// ─────────────────────── Knowledge base (imported) ───────────────────────
 const FALLBACK: Record<string, string> = {
-    en: "I'm not sure I understand that. Could you rephrase?\n\nI can help with services, pricing, pickup/delivery, locations, hours, commercial services, or job openings.",
-    sin: "මට ඔබේ පණිවිඩය තේරුම් ගත නොහැක. කරුණාකර නැවත කියන්න.\n\nසේවා, මිල, එකතු/බෙදාහැරීම, පිහිටීම්, වේලාවන්, ව්‍යාපාරික සේවා හෝ රැකියාවන් ගැන උදව් කළ හැක.",
+    en: "I'm not sure I understand that. Could you rephrase?\n\nI can help with services, pricing, pickup/delivery, locations, hours, commercial services, loyalty, or tracking your order.",
+    sin: "මට ඔබේ පණිවිඩය තේරුම් ගත නොහැක. කරුණාකර නැවත කියන්න.\n\nසේවා, මිල, එකතු/බෙදාහැරීම, පිහිටීම්, වේලාවන්, ව්‍යාපාරික සේවා, ලාභය හෝ ඔබේ ඇණවුම ලුහුබදිනවා නම් උදව් කළ හැක.",
 };
 
 // ─────────────────────── Classifier ───────────────────────
@@ -130,6 +25,8 @@ function classifyIntent(text: string): string {
         { intent: "commercial", test: /\b(hotel|business|commercial|bulk|restaurant|spa|gym|corporate|linen)\b/ },
         { intent: "careers", test: /\b(job|hiring|work|career|team|employ|vacancy|apply)\b/ },
         { intent: "quality", test: /\b(quality|care|safe|damage|delicate|stain|silk|trust)\b/ },
+        { intent: "track", test: /\b(track|tracking|status|where\s*is\s*my|order\s*update|my\s*laundry)\b/ },
+        { intent: "process", test: /\b(process|how\s*it\s*works|steps|what\s*happens)\b/ },
     ];
     for (const rule of rules) {
         if (rule.test.test(lower)) return rule.intent;
@@ -144,19 +41,43 @@ function replyFromCorpus(intent: string, lang: Lang): string {
     if (intent === "fallback") return FALLBACK[lang] ?? FALLBACK.en;
     const faq = faqs.find((f) => f.intent === intent);
     if (!faq) return FALLBACK[lang] ?? FALLBACK.en;
-    const pool = lang === "sin" && faq.responses.sin && faq.responses.sin.length > 0
-        ? faq.responses.sin
-        : faq.responses.en;
+    const pool =
+        lang === "sin" && faq.responses.sin && faq.responses.sin.length > 0
+            ? faq.responses.sin
+            : faq.responses.en;
     return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// ─────────────────── LLM integration point (optional) ───────────────────
-async function askLLM(message: string, lang: Lang): Promise<string> {
+// ─────────────────── Our own model integration ───────────────────
+function systemPrompt(lang: Lang): string {
+    const langName = lang === "sin" ? "Sinhala" : "English";
+    return [
+        "You are the Love Laundry customer support assistant, a laundry and dry-cleaning business in Chilaw, Sri Lanka.",
+        `Answer in ${langName}. Be friendly, concise and helpful.`,
+        "Use ONLY the facts provided in the LOVE LAUNDRY KNOWLEDGE BASE and any LIVE ORDER INFORMATION below.",
+        "Never invent services, prices, locations, phone numbers or policies that are not in the context.",
+        "If the answer is not in the context, say you don't know and invite the customer to WhatsApp " +
+            companyWhatsApp() +
+            " for help.",
+        "For actions that need a human (booking, complaints, refunds) give the contact details and offer to connect them.",
+    ].join(" ");
+}
+
+function companyWhatsApp(): string {
+    const c = faqs.find((f) => f.intent === "contact");
+    return "+94 77 420 0919";
+}
+
+async function askModel(
+    message: string,
+    lang: Lang,
+    context: string,
+): Promise<string> {
     const provider = process.env.LLM_PROVIDER;
     const apiKey = process.env.LLM_API_KEY;
-    const model = process.env.LLM_MODEL ?? "gpt-4o-mini";
-    const baseUrl = process.env.LLM_BASE_URL ?? "https://api.openai.com/v1";
-    if (!provider || !apiKey) throw new Error("LLM not configured");
+    const model = process.env.LLM_MODEL ?? "lovelaundry";
+    const baseUrl = process.env.LLM_BASE_URL ?? "http://localhost:11434/v1";
+    if (!provider || !apiKey) throw new Error("Model not configured");
     const res = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -165,30 +86,34 @@ async function askLLM(message: string, lang: Lang): Promise<string> {
             messages: [
                 {
                     role: "system",
-                    content:
-                        "You are the Love Laundry support assistant. Answer in " +
-                        (lang === "sin" ? "Sinhala" : "English") +
-                        " using only facts about Love Laundry's services, pricing, pickup/delivery, locations, hours, commercial services, and careers.",
+                    content: systemPrompt(lang) + "\n\n--- LOVE LAUNDRY KNOWLEDGE BASE ---\n" + context,
                 },
                 { role: "user", content: message },
             ],
         }),
     });
-    if (!res.ok) throw new Error(`LLM request failed: ${res.status}`);
+    if (!res.ok) throw new Error(`Model request failed: ${res.status}`);
     const data = (await res.json()) as {
         choices?: Array<{ message?: { content?: string } }>;
     };
     const reply = data.choices?.[0]?.message?.content?.trim();
-    if (!reply) throw new Error("LLM returned empty reply");
+    if (!reply) throw new Error("Model returned empty reply");
     return reply;
 }
 
 export async function generateReply(message: string, lang: Lang = "en"): Promise<string> {
+    const ref = extractOrderRef(message);
+    if (ref) {
+        const tracking = await getOrderTracking(ref);
+        if (tracking) return formatTracking(tracking, lang);
+    }
+
     if (process.env.LLM_PROVIDER && process.env.LLM_API_KEY) {
+        const context = await buildContext(message, lang);
         try {
-            return await askLLM(message, lang);
+            return await askModel(message, lang, context);
         } catch {
-            // Fall through to rule-based corpus on any LLM failure.
+            // Fall through to rule-based corpus on any model failure.
         }
     }
     const intent = classifyIntent(message);
@@ -213,7 +138,7 @@ app.post("/api/chat", async (req, res) => {
         }
         const lang = body.lang === "sin" ? "sin" : "en";
         const reply = await generateReply(body.message, lang);
-        const payload: ChatResponse = { reply, intent: undefined };
+        const payload = { reply, intent: undefined };
         res.json(payload);
     } catch {
         res.status(500).json({ error: "internal error" });
@@ -226,7 +151,6 @@ app.get("/health", (_req, res) => {
 
 export { app };
 
-// Vercel (@vercel/node) accepts a named `handler` or default export.
 const handler = (req: any, res: any) => {
     try {
         return app(req, res);
