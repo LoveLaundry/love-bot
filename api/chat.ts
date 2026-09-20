@@ -65,7 +65,7 @@ function systemPrompt(lang: Lang): string {
 
 function companyWhatsApp(): string {
     const c = faqs.find((f) => f.intent === "contact");
-    return "+94 77 420 0919";
+    return "+94 77 4200 919";
 }
 
 async function askModel(

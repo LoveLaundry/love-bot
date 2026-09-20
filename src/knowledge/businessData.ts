@@ -19,8 +19,8 @@ export const company = {
         "Bibiladeniya",
         "Wennappuwa",
     ],
-    phone: "+94 77 420 0919",
-    whatsapp: "+94 77 420 0919",
+    phone: "+94 77 4200 919",
+    whatsapp: "+94 77 4200 919",
     email: "lovelaundry01@gmail.com",
     bookingHours: "24/7 via WhatsApp",
     pickupDeliveryHours: "Mon-Sat: 8 AM - 7 PM; Sunday: 9 AM - 5 PM",
@@ -173,12 +173,12 @@ export const faqs: Faq[] = [
         patterns: ["contact", "phone", "whatsapp", "call", "email", "number", "reach"],
         responses: {
             en: [
-                "Reach us at Phone/WhatsApp +94 77 420 0919 or email lovelaundry01@gmail.com.",
+                "Reach us at Phone/WhatsApp +94 77 4200 919 or email lovelaundry01@gmail.com.",
             ],
         },
         question: "How do I contact Love Laundry?",
         answer:
-            "Reach us at Phone or WhatsApp +94 77 420 0919, or email lovelaundry01@gmail.com. We're happy to help anytime via WhatsApp.",
+            "Reach us at Phone or WhatsApp +94 77 4200 919, or email lovelaundry01@gmail.com. We're happy to help anytime via WhatsApp.",
     },
     {
         intent: "commercial",
