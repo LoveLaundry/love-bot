@@ -8,6 +8,24 @@ export interface Faq {
     answer: string;
 }
 
+/**
+ * The business operates only in Sri Lanka, so every timestamp we hand to the
+ * model is rendered on the Asia/Colombo clock. Without this the serverless
+ * runtime (UTC) would make us quote customers the wrong time.
+ */
+export const TIME_ZONE = "Asia/Colombo";
+
+/** Render an instant for the model, explicitly on the Sri Lankan clock. */
+export function formatLkt(value: string | number | Date): string {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("en-GB", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: TIME_ZONE,
+    }).format(date);
+}
+
 export const company = {
     name: "Love Laundry",
     mainCentre: "Chilaw, Sri Lanka",

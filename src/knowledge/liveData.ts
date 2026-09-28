@@ -1,4 +1,4 @@
-import type { Lang } from "./businessData";
+import { formatLkt, type Lang } from "./businessData";
 
 export interface TrackingStatusEntry {
     status?: string;
@@ -96,7 +96,7 @@ export function formatTracking(info: TrackingInfo, lang: Lang): string {
         lines.push("History:");
         for (const h of info.status_history) {
             const when = h.changed_at
-                ? new Date(h.changed_at).toLocaleString()
+                ? formatLkt(h.changed_at)
                 : "";
             lines.push(`- ${statusLabel(h.status)} ${when ? `(${when})` : ""}`);
         }
