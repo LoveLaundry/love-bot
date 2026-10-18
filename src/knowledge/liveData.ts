@@ -20,7 +20,6 @@ export interface TrackingInfo {
 
 const QUOTATION_SERVICE_URL = (process.env.QUOTATION_SERVICE_URL || "").replace(/\/+$/, "");
 const BILL_SERVICE_URL = (process.env.BILL_SERVICE_URL || "").replace(/\/+$/, "");
-const MASTER_KEY = process.env.MASTER_KEY || "";
 
 const STATUS_LABELS: Record<string, string> = {
     draft: "Draft",
@@ -64,26 +63,13 @@ export async function getOrderTracking(ref: string): Promise<TrackingInfo | null
     return null;
 }
 
-export async function getLoyalty(clientRef: string): Promise<string | null> {
-    if (!BILL_SERVICE_URL || !MASTER_KEY) return null;
-    try {
-        const res = await fetch(
-            `${BILL_SERVICE_URL}/loyalty/${encodeURIComponent(clientRef)}`,
-            {
-                headers: { "x-master-key": MASTER_KEY },
-                signal: timeout(5000),
-            },
-        );
-        if (!res.ok) return null;
-        const data = (await res.json()) as {
-            points?: number;
-            tier?: string;
-            lifetime_spend?: number;
-        };
-        return `Loyalty: tier ${data.tier ?? "standard"}, points ${data.points ?? 0}, lifetime spend Rs. ${data.lifetime_spend ?? 0}.`;
-    } catch {
-        return null;
-    }
+/**
+ * Loyalty lookups are intentionally disabled here. The bot must not carry a
+ * database master key or impersonate an internal service. Add a scoped,
+ * authenticated service endpoint before re-enabling this capability.
+ */
+export async function getLoyalty(_clientRef: string): Promise<string | null> {
+    return null;
 }
 
 export function formatTracking(info: TrackingInfo, lang: Lang): string {

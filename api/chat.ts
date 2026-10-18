@@ -122,19 +122,54 @@ export async function generateReply(message: string, lang: Lang = "en"): Promise
 
 // ─────────────────────── Express app ───────────────────────
 const app = express();
-app.use(cors());
-app.use(express.json());
+const API_KEY = process.env.CHAT_API_KEY?.trim();
+const allowedOrigins = (process.env.CHAT_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+const requestLog = new Map<string, number[]>();
+const RATE_LIMIT = 30;
+const RATE_WINDOW_MS = 60_000;
 
-const API_KEY = process.env.CHAT_API_KEY;
+app.use(cors({
+    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
+    methods: ["POST", "OPTIONS"],
+}));
+app.use(express.json({ limit: "32kb" }));
+
+function clientKey(req: express.Request): string {
+    return req.ip || req.socket.remoteAddress || "unknown";
+}
+
+function isRateLimited(key: string): boolean {
+    const now = Date.now();
+    const recent = (requestLog.get(key) ?? []).filter((at) => at > now - RATE_WINDOW_MS);
+    if (recent.length >= RATE_LIMIT) {
+        requestLog.set(key, recent);
+        return true;
+    }
+    recent.push(now);
+    requestLog.set(key, recent);
+    return false;
+}
 
 app.post("/api/chat", async (req, res) => {
     try {
+        if (!API_KEY) {
+            return res.status(503).json({ error: "service unavailable" });
+        }
+        if (isRateLimited(clientKey(req))) {
+            return res.status(429).json({ error: "too many requests" });
+        }
+        if (req.headers["x-api-key"] !== API_KEY) {
+            return res.status(401).json({ error: "unauthorized" });
+        }
         const body = req.body as { message?: unknown; lang?: unknown };
         if (typeof body.message !== "string" || body.message.trim() === "") {
             return res.status(400).json({ error: "message is required" });
         }
-        if (API_KEY && req.headers["x-api-key"] !== API_KEY) {
-            return res.status(401).json({ error: "unauthorized" });
+        if (body.message.length > 4000) {
+            return res.status(413).json({ error: "message too long" });
         }
         const lang = body.lang === "sin" ? "sin" : "en";
         const reply = await generateReply(body.message, lang);
@@ -162,7 +197,6 @@ const handler = (req: any, res: any) => {
             res.end(
                 JSON.stringify({
                     error: "bot handler failed",
-                    message: e?.message ?? String(e),
                 }),
             );
         }
