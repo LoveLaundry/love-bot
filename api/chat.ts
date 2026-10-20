@@ -158,11 +158,11 @@ app.post("/api/chat", async (req, res) => {
         if (!API_KEY) {
             return res.status(503).json({ error: "service unavailable" });
         }
-        if (isRateLimited(clientKey(req))) {
-            return res.status(429).json({ error: "too many requests" });
-        }
         if (req.headers["x-api-key"] !== API_KEY) {
             return res.status(401).json({ error: "unauthorized" });
+        }
+        if (isRateLimited(clientKey(req))) {
+            return res.status(429).json({ error: "too many requests" });
         }
         const body = req.body as { message?: unknown; lang?: unknown };
         if (typeof body.message !== "string" || body.message.trim() === "") {
