@@ -124,15 +124,18 @@ export async function generateReply(message: string, lang: Lang = "en"): Promise
 // ─────────────────────── Express app ───────────────────────
 const KNOWN_ORIGINS = [
     "https://lovelaundry-manager.vercel.app",
-    "https://hotels-manager.vercel.app",
-    "https://hotels-manager-amber.vercel.app",
-    "https://shops-manager.vercel.app",
     "https://system-lovelaundry-lk.vercel.app",
+    "https://lovelaundry-shop-app.vercel.app",
+    "https://hotels-manager-amber.vercel.app",
+    "https://hotels-manager.vercel.app",
+    "https://shops-manager.vercel.app",
     "https://lovelaundry.lk",
     "https://www.lovelaundry.lk",
     "https://public.lovelaundry.lk",
-    ...[3000, 5173, 5174, 5175, 5176].flatMap((port) => [
+    "http://localhost",
+    ...[3000, 5173, 5174, 5175, 5176, 8101, 8820].flatMap((port) => [
         `http://localhost:${port}`,
+        `http://127.0.0.1:${port}`,
         `https://localhost:${port}`,
     ]),
 ];
