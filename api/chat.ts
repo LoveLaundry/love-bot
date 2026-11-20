@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { timingSafeEqual } from "node:crypto";
 import { buildContext, extractOrderRef } from "../src/knowledge/context";
 import { getOrderTracking, formatTracking } from "../src/knowledge/liveData";
 import { faqs } from "../src/knowledge/businessData";
@@ -121,21 +122,61 @@ export async function generateReply(message: string, lang: Lang = "en"): Promise
 }
 
 // ─────────────────────── Express app ───────────────────────
+const KNOWN_ORIGINS = [
+    "https://lovelaundry-manager.vercel.app",
+    "https://hotels-manager.vercel.app",
+    "https://hotels-manager-amber.vercel.app",
+    "https://shops-manager.vercel.app",
+    "https://system-lovelaundry-lk.vercel.app",
+    "https://lovelaundry.lk",
+    "https://www.lovelaundry.lk",
+    "https://public.lovelaundry.lk",
+    ...[3000, 5173, 5174, 5175, 5176].flatMap((port) => [
+        `http://localhost:${port}`,
+        `https://localhost:${port}`,
+    ]),
+];
+
+function buildAllowedOrigins(): Set<string> {
+    const origins = new Set<string>(KNOWN_ORIGINS);
+    for (const name of ["CORS_ORIGINS", "ALLOWED_ORIGINS", "CHAT_ALLOWED_ORIGINS"]) {
+        const configured = process.env[name];
+        if (!configured) continue;
+        for (const entry of configured.split(",")) {
+            const origin = entry.trim();
+            if (origin && origin !== "*") origins.add(origin);
+        }
+    }
+    return origins;
+}
+
+const ALLOWED_ORIGINS = buildAllowedOrigins();
+const CORS_DENIED = "CORS_ORIGIN_NOT_ALLOWED";
+
 const app = express();
 const API_KEY = process.env.CHAT_API_KEY?.trim();
-const allowedOrigins = (process.env.CHAT_ALLOWED_ORIGINS ?? "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
 const requestLog = new Map<string, number[]>();
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60_000;
 
-app.use(cors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
-    methods: ["POST", "OPTIONS"],
-}));
+app.use(
+    cors({
+        origin: (origin, callback) => {
+            if (!origin || ALLOWED_ORIGINS.has(origin)) return callback(null, true);
+            return callback(new Error(CORS_DENIED));
+        },
+        methods: ["POST", "OPTIONS"],
+    }),
+);
 app.use(express.json({ limit: "32kb" }));
+app.use(
+    (err: Error, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+        if (err.message === CORS_DENIED) {
+            return res.status(403).json({ error: "origin not allowed" });
+        }
+        return next(err);
+    },
+);
 
 function clientKey(req: express.Request): string {
     return req.ip || req.socket.remoteAddress || "unknown";
@@ -153,26 +194,40 @@ function isRateLimited(key: string): boolean {
     return false;
 }
 
+function isApiKeyValid(provided: string | undefined): boolean {
+    if (!API_KEY) return false;
+    if (typeof provided !== "string") return false;
+    const expected = Buffer.from(API_KEY, "utf8");
+    const actual = Buffer.from(provided, "utf8");
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
 app.post("/api/chat", async (req, res) => {
     try {
         if (!API_KEY) {
             return res.status(503).json({ error: "service unavailable" });
         }
-        if (req.headers["x-api-key"] !== API_KEY) {
+        const providedKeys = req.headers["x-api-key"];
+        const providedKey = Array.isArray(providedKeys) ? providedKeys[0] : providedKeys;
+        if (!isApiKeyValid(providedKey)) {
             return res.status(401).json({ error: "unauthorized" });
         }
         if (isRateLimited(clientKey(req))) {
             return res.status(429).json({ error: "too many requests" });
         }
         const body = req.body as { message?: unknown; lang?: unknown };
-        if (typeof body.message !== "string" || body.message.trim() === "") {
-            return res.status(400).json({ error: "message is required" });
+        if (typeof body.message !== "string") {
+            return res.status(400).json({ error: "message must be a string" });
         }
-        if (body.message.length > 4000) {
-            return res.status(413).json({ error: "message too long" });
+        const message = body.message.trim();
+        if (message === "") {
+            return res.status(400).json({ error: "message must not be empty" });
+        }
+        if (message.length > 2000) {
+            return res.status(400).json({ error: "message must be at most 2000 characters" });
         }
         const lang = body.lang === "sin" ? "sin" : "en";
-        const reply = await generateReply(body.message, lang);
+        const reply = await generateReply(message, lang);
         const payload = { reply, intent: undefined };
         res.json(payload);
     } catch {
